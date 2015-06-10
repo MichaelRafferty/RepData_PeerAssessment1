@@ -1,15 +1,10 @@
----
-title: "Reproducible Research: Peer Assessment 1"
-Author: Michael Rafferty
-output: 
-  html_document:
-    keep_md: true
----
+# Reproducible Research: Peer Assessment 1
 ## Introduction
 This is my submission for Peer Assessment 1 of Reproducible Research based on the instructions in the README file.
 
 First I need to check to see if the data is unziped, and if not unzip it.  This assumes the working directory is set correctly, but will download activity.zip from the location identified in the README if it's also missing.
-```{r getdata}
+
+```r
 if(!file.exists("activity.csv")) {
     if(!file.exists("activity.zip")) {
         download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", 
@@ -20,7 +15,8 @@ if(!file.exists("activity.csv")) {
 ```
 
 It's also useful to load libraries I'm going to use here.  I'm also going to set some options that I feel improve the output farther down.
-```{r lib}
+
+```r
 library(dplyr, warn.conflicts=FALSE)
 
 options(scipen=2, digits=4)
@@ -33,7 +29,8 @@ After reading the data in 2 steps are currently taken to preprocess the data for
 1. converting the date field to the Date type
 2. building a time of day (hour:minute) from the interval
 3. building a block number to represent each interval so they are evenly spaced in plots.
-```{r readdata}
+
+```r
 act.data <- read.csv("activity.csv")
 act.data$date <- as.Date(act.data$date)
 act.data$time <- sprintf("%02d:%02d", 
@@ -45,7 +42,8 @@ act.data$block <- 60*floor(act.data$interval/100) + act.data$interval%%100
 It may also be useful to create a timestamp field later.
 
 ## What is mean total number of steps taken per day?
-```{r dailysteps}
+
+```r
 ## first build the summaries and statistics to be used in this section
 daily.activity <- group_by(act.data, date) %>% summarize(daily.steps=sum(steps), na.activity=sum(is.na(steps)))
 
@@ -53,11 +51,12 @@ mean.steps <- mean(daily.activity$daily.steps, na.rm=TRUE)
 sd.steps <- sd(daily.activity$daily.steps, na.rm=TRUE)
 median.steps <- quantile(daily.activity$daily.steps, probs=0.5, na.rm=TRUE)
 ```
-The number of steps per day was distributed around the mean of **`r mean.steps`** with a standard deviation of `r sd.steps`.  The median of **`r median.steps`** reflects slightly more below average days than above average days, with a few days with exceptionally high step counts.  
+The number of steps per day was distributed around the mean of **10766.1887** with a standard deviation of 4269.1805.  The median of **10765** reflects slightly more below average days than above average days, with a few days with exceptionally high step counts.  
 
 The histogram below shows the distribution of days across 2500 step breaks.
 
-```{r stepshistogram}
+
+```r
 with(daily.activity,
      hist(daily.steps, 
           breaks=c(0, 2500, 5000, 7500, 10000, 12500, 15000, 17500, 20000, 22500, 25000),
@@ -87,9 +86,12 @@ legend("topright",
        )
 ```
 
+![](PA1_template_files/figure-html/stepshistogram-1.png) 
+
 
 ## What is the average daily activity pattern?
-```{r dailypattern}
+
+```r
 ## first build the summaries and statistics needed for this section
 time.activity <- group_by(act.data, block) %>% 
     summarize(ave.steps=mean(steps, na.rm=TRUE), 
@@ -99,9 +101,10 @@ time.activity <- group_by(act.data, block) %>%
 max.time <- which.max(time.activity$ave.steps)
 ```
 
-There were very few steps taken overnight (between 9pm and 6am).  THe 5 minute block with the most steps was **`r time.activity[max.time, "time"]`** with `r time.activity[max.time, "ave.steps"]` taken on average during that time period.  There were also notable peaks at roughly noon, 4pm, and 7pm.  The average number of steps per 5 minutes jumps rapidly starting around 5:30 am and trails off after 7:30pm.
+There were very few steps taken overnight (between 9pm and 6am).  THe 5 minute block with the most steps was **08:35** with 206.1698 taken on average during that time period.  There were also notable peaks at roughly noon, 4pm, and 7pm.  The average number of steps per 5 minutes jumps rapidly starting around 5:30 am and trails off after 7:30pm.
 
-```{r dailytimeline}
+
+```r
 with(time.activity,{
      plot(block, ave.steps, type="l", xaxt="n",
           xlab="Time of Day", ylab="Average number of steps",
@@ -124,11 +127,13 @@ text(x=time.activity[max.time,"block"],
      col="blue",
      cex=0.7
      )
-
 ```
 
+![](PA1_template_files/figure-html/dailytimeline-1.png) 
+
 ## Imputing missing values
-```{r imputNA}
+
+```r
 ## first build the summaries and statistics
 total.na <- sum(is.na(act.data$steps))
 na.events <- filter(act.data, is.na(steps))
@@ -136,12 +141,40 @@ na.days <- group_by(na.events, date) %>% summarize(natimes=sum(is.na(steps)))
 na.times <- group_by(na.events, time) %>% summarize(natimes=sum(is.na(steps)))
 
 na.days
+```
+
+```
+## Source: local data frame [8 x 2]
+## 
+##         date natimes
+## 1 2012-10-01     288
+## 2 2012-10-08     288
+## 3 2012-11-01     288
+## 4 2012-11-04     288
+## 5 2012-11-09     288
+## 6 2012-11-10     288
+## 7 2012-11-14     288
+## 8 2012-11-30     288
+```
+
+```r
 summary(na.times)
 ```
-There are **`r total.na`** events where the number of steps was not recorded.  They are distributed on 8 days and fill all the timeslots on those days. 
+
+```
+##      time              natimes 
+##  Length:288         Min.   :8  
+##  Class :character   1st Qu.:8  
+##  Mode  :character   Median :8  
+##                     Mean   :8  
+##                     3rd Qu.:8  
+##                     Max.   :8
+```
+There are **2304** events where the number of steps was not recorded.  They are distributed on 8 days and fill all the timeslots on those days. 
 
 I considered the impact of using the median number of steps for a 5 minute block.  However, as can be seen in the following chart, most blocks had no activity in them more than half the time.
-```{r checkMedian,fig.height=3}
+
+```r
 with(time.activity,{
      plot(block, med.steps, type="l", xaxt="n",
           xlab="Time of Day", ylab="Average number of steps",
@@ -152,9 +185,12 @@ with(time.activity,{
      })
 ```
 
+![](PA1_template_files/figure-html/checkMedian-1.png) 
+
 Because the median values for the different times are significantly lower than the averages, the median times would substantially underweight random movement done during a day.  Therefore, I'll use the average value for a timeslot to fill in for NA values in the original data.
 
-```{r insertMedian}
+
+```r
 ## first make a copy
 new.act <- act.data
 
@@ -180,11 +216,12 @@ mean.steps2 <- mean(daily.activity2$daily.steps)
 sd.steps2 <- sd(daily.activity2$daily.steps)
 median.steps2 <- quantile(daily.activity2$daily.steps, probs=0.5)
 ```
-After replacing NA values with average values for that time, the number of steps per day was distributed around the mean of **`r mean.steps2`** with a standard deviation of `r sd.steps2`.  The median of **`r median.steps2`** reflects slightly more below average days than above average days, with a few days with exceptionally high step counts.  
+After replacing NA values with average values for that time, the number of steps per day was distributed around the mean of **10766.1887** with a standard deviation of 3974.3907.  The median of **10766.1887** reflects slightly more below average days than above average days, with a few days with exceptionally high step counts.  
 
 The histogram below shows the distribution of days across 2500 step breaks.
 
-```{r stepshistogram_noNA}
+
+```r
 with(daily.activity2,
      hist(daily.steps, 
           breaks=c(0, 2500, 5000, 7500, 10000, 12500, 15000, 17500, 20000, 22500, 25000),
@@ -214,10 +251,13 @@ legend("topright",
        )
 ```
 
+![](PA1_template_files/figure-html/stepshistogram_noNA-1.png) 
+
 By adding several identical values to the exact center of the graph, the mean did not change, but the median did.
 
 ## Are there differences in activity patterns between weekdays and weekends?
-```{r weekdays}
+
+```r
 ## first tag weekdays and weekends
 new.act$weekday <- weekdays(new.act$date)
 new.act$workweek <- ifelse(new.act$weekday %in% c("Saturday", "Sunday"), "weekend", "weekday")
@@ -231,7 +271,7 @@ weekly.activity <- group_by(new.act, workweek, block) %>%
 weekday.activity <- filter(weekly.activity, workweek=="weekday")
 weekend.activity <- filter(weekly.activity, workweek=="weekend")
 
-par(mfrow=c(2,1),mar())
+par(mfrow=c(2,1))
 with(weekday.activity, {
      plot(block, ave.steps, type="l", xaxt="n",
           xlab="", ylab="#steps",
@@ -246,3 +286,5 @@ with(weekend.activity, {
           labels=c("midnight", "3am", "6am", "9am", "noon", "3pm", "6pm", "9pm", "midnight"))
      })
 ```
+
+![](PA1_template_files/figure-html/weekdays-1.png) 
