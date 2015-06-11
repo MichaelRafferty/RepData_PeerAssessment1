@@ -17,7 +17,9 @@ if(!file.exists("activity.csv")) {
 It's also useful to load libraries I'm going to use here.  I'm also going to set some options that I feel improve the output farther down.
 
 ```r
-library(dplyr, warn.conflicts=FALSE)
+library(dplyr, quietly=TRUE, warn.conflicts=FALSE)
+library(ggplot2, quietly=TRUE)
+library(gridExtra, quietly=TRUE)
 
 options(scipen=2, digits=4)
 ```
@@ -28,7 +30,8 @@ After reading the data in 2 steps are currently taken to preprocess the data for
 
 1. converting the date field to the Date type
 2. building a time of day (hour:minute) from the interval
-3. building a block number to represent each interval so they are evenly spaced in plots.
+3. building a block number that is continuous and evenly spaced to support better timeseries plots.
+
 
 ```r
 act.data <- read.csv("activity.csv")
@@ -38,8 +41,6 @@ act.data$time <- sprintf("%02d:%02d",
                          act.data$interval%%100)
 act.data$block <- 60*floor(act.data$interval/100) + act.data$interval%%100
 ```
-
-It may also be useful to create a timestamp field later.
 
 ## What is mean total number of steps taken per day?
 
@@ -53,13 +54,13 @@ median.steps <- quantile(daily.activity$daily.steps, probs=0.5, na.rm=TRUE)
 ```
 The number of steps per day was distributed around the mean of **10766.1887** with a standard deviation of 4269.1805.  The median of **10765** reflects slightly more below average days than above average days, with a few days with exceptionally high step counts.  
 
-The histogram below shows the distribution of days across 2500 step breaks.
+The histogram below shows the distribution of days across 2000 step breaks.  There are lines representing the mean and median in the graph, but they're too close to distinguish.
 
 
 ```r
 with(daily.activity,
      hist(daily.steps, 
-          breaks=c(0, 2500, 5000, 7500, 10000, 12500, 15000, 17500, 20000, 22500, 25000),
+          breaks=seq(0,26000,2000),
           xlab="# of Steps per day",
           ylab="Frequency (# of days)",
           main="Histogram of Total Daily Steps"
@@ -108,7 +109,7 @@ There were very few steps taken overnight (between 9pm and 6am).  THe 5 minute b
 with(time.activity,{
      plot(block, ave.steps, type="l", xaxt="n",
           xlab="Time of Day", ylab="Average number of steps",
-          main="average number of steps over 5 minute blocks") 
+          main="average number of steps over 5 minute intervals") 
      axis(side=1, 
           at=60*c(0,3,6,9,12,15,18,21,24), 
           labels=c("midnight", "3am", "6am", "9am", "noon", "3pm", "6pm", "9pm", "midnight"))
@@ -172,7 +173,8 @@ summary(na.times)
 ```
 There are **2304** events where the number of steps was not recorded.  They are distributed on 8 days and fill all the timeslots on those days. 
 
-I considered the impact of using the median number of steps for a 5 minute block.  However, as can be seen in the following chart, most blocks had no activity in them more than half the time.
+I considered the impact of using the median number of steps for a 5 minute block.  However, as can be seen in the following chart, most intervals had no activity more than half the time significantly biasing overall patterns of daily activity.
+
 
 ```r
 with(time.activity,{
@@ -216,7 +218,7 @@ mean.steps2 <- mean(daily.activity2$daily.steps)
 sd.steps2 <- sd(daily.activity2$daily.steps)
 median.steps2 <- quantile(daily.activity2$daily.steps, probs=0.5)
 ```
-After replacing NA values with average values for that time, the number of steps per day was distributed around the mean of **10766.1887** with a standard deviation of 3974.3907.  The median of **10766.1887** reflects slightly more below average days than above average days, with a few days with exceptionally high step counts.  
+After replacing NA values with average values for that time, the number of steps per day was distributed around the mean of **10766.1887** with a standard deviation of 3974.3907.  The median of **10766.1887** now matches the mean, indicating that replacing the NA values created enough perfectly average days to shift the median to that value.
 
 The histogram below shows the distribution of days across 2500 step breaks.
 
@@ -224,10 +226,10 @@ The histogram below shows the distribution of days across 2500 step breaks.
 ```r
 with(daily.activity2,
      hist(daily.steps, 
-          breaks=c(0, 2500, 5000, 7500, 10000, 12500, 15000, 17500, 20000, 22500, 25000),
+          breaks=seq(0,26000,2000),
           xlab="# of Steps per day",
           ylab="Frequency (# of days)",
-          main="Histogram of Total Daily Steps"
+          main="Histogram of Total Daily Steps after replacing NAs"
           )
      )
 abline(v=median.steps2, col="red")
@@ -259,7 +261,7 @@ By adding several identical values to the exact center of the graph, the mean di
 
 ```r
 ## first tag weekdays and weekends
-new.act$weekday <- weekdays(new.act$date)
+new.act$weekday <- ordered(weekdays(new.act$date), c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))
 new.act$workweek <- ifelse(new.act$weekday %in% c("Saturday", "Sunday"), "weekend", "weekday")
 new.act$workweek <-factor(new.act$workweek)
 
@@ -267,24 +269,45 @@ weekly.activity <- group_by(new.act, workweek, block) %>%
     summarize(ave.steps=mean(steps, na.rm=TRUE), 
               med.steps=quantile(steps, probs=0.5, na.rm=TRUE),
               time=min(time))
-
-weekday.activity <- filter(weekly.activity, workweek=="weekday")
-weekend.activity <- filter(weekly.activity, workweek=="weekend")
-
-par(mfrow=c(2,1))
-with(weekday.activity, {
-     plot(block, ave.steps, type="l", xaxt="n",
-          xlab="", ylab="#steps",
-          main="Average number of steps over 5 minute blocks") 
-
-     })
-with(weekend.activity, {
-     plot(block, ave.steps, type="l", xaxt="n",
-          xlab="Time of Day", ylab="#steps")
-    axis(side=1, 
-          at=60*c(0,3,6,9,12,15,18,21,24), 
-          labels=c("midnight", "3am", "6am", "9am", "noon", "3pm", "6pm", "9pm", "midnight"))
-     })
 ```
 
-![](PA1_template_files/figure-html/weekdays-1.png) 
+There are significant difference between the patterns of activity seen on weekdays and weekends as seen in the plots below:
+
+
+```r
+g <- ggplot(data=weekly.activity, 
+            aes(x=block, y=ave.steps, group=workweek))
+p <- g + facet_grid(workweek ~.) + geom_line() + 
+    scale_x_discrete(
+        breaks=60*c(0,3,6,9,12,15,18,21,24),
+        labels=c("midnight", "3am", "6am", "9am", "noon", "3pm", "6pm", "9pm", "midnight")
+        ) + expand_limits(x=60*24) + 
+    xlab("Time of Day") + ylab("Average Steps per 5 minute interval") + 
+    ggtitle("Average Steps per day broken by weekday/weekend")
+print(p)
+```
+
+![](PA1_template_files/figure-html/weekly activity plot-1.png) 
+
+Because I was curious I also looked at differences among the individual days and found that Thursday and Friday also differed from the earlier days in the week.
+
+
+```r
+weekday.activity <- group_by(new.act, weekday, block) %>% 
+    summarize(ave.steps=mean(steps, na.rm=TRUE), 
+              med.steps=quantile(steps, probs=0.5, na.rm=TRUE),
+              time=min(time))
+
+g2 <- ggplot(data=weekday.activity, 
+            aes(x=block, y=ave.steps, group=weekday))
+p2 <- g2 + facet_grid(weekday ~.) + geom_line() + 
+    scale_x_discrete(
+        breaks=60*c(0,3,6,9,12,15,18,21,24),
+        labels=c("midnight", "3am", "6am", "9am", "noon", "3pm", "6pm", "9pm", "midnight")
+        ) + expand_limits(x=60*24) + 
+    xlab("Time of Day") + ylab("Average Steps per 5 minutes") + 
+    ggtitle("Average Steps per day broken by weekday/weekend")
+print(p2)
+```
+
+![](PA1_template_files/figure-html/weekdayactivity plot-1.png) 
