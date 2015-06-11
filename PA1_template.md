@@ -173,23 +173,7 @@ summary(na.times)
 ```
 There are **2304** events where the number of steps was not recorded.  They are distributed on 8 days and fill all the timeslots on those days. 
 
-I considered the impact of using the median number of steps for a 5 minute block.  However, as can be seen in the following chart, most intervals had no activity more than half the time significantly biasing overall patterns of daily activity.
-
-
-```r
-with(time.activity,{
-     plot(block, med.steps, type="l", xaxt="n",
-          xlab="Time of Day", ylab="Average number of steps",
-          main="Median number of steps over 5 minute blocks") 
-     axis(side=1, 
-          at=60*c(0,3,6,9,12,15,18,21,24), 
-          labels=c("midnight", "3am", "6am", "9am", "noon", "3pm", "6pm", "9pm", "midnight"))
-     })
-```
-
-![](PA1_template_files/figure-html/checkMedian-1.png) 
-
-Because the median values for the different times are significantly lower than the averages, the median times would substantially underweight random movement done during a day.  Therefore, I'll use the average value for a timeslot to fill in for NA values in the original data.
+Because there was no information on the days with missing values, I decided to use the average value for a timeslot to fill in for NA values in the original data.
 
 
 ```r
@@ -220,7 +204,7 @@ median.steps2 <- quantile(daily.activity2$daily.steps, probs=0.5)
 ```
 After replacing NA values with average values for that time, the number of steps per day was distributed around the mean of **10766.1887** with a standard deviation of 3974.3907.  The median of **10766.1887** now matches the mean, indicating that replacing the NA values created enough perfectly average days to shift the median to that value.
 
-The histogram below shows the distribution of days across 2500 step breaks.
+The histogram below shows the distribution of days across 2000 step breaks.
 
 
 ```r
@@ -288,26 +272,3 @@ print(p)
 ```
 
 ![](PA1_template_files/figure-html/weekly activity plot-1.png) 
-
-Because I was curious I also looked at differences among the individual days and found that Thursday and Friday also differed from the earlier days in the week.
-
-
-```r
-weekday.activity <- group_by(new.act, weekday, block) %>% 
-    summarize(ave.steps=mean(steps, na.rm=TRUE), 
-              med.steps=quantile(steps, probs=0.5, na.rm=TRUE),
-              time=min(time))
-
-g2 <- ggplot(data=weekday.activity, 
-            aes(x=block, y=ave.steps, group=weekday))
-p2 <- g2 + facet_grid(weekday ~.) + geom_line() + 
-    scale_x_discrete(
-        breaks=60*c(0,3,6,9,12,15,18,21,24),
-        labels=c("midnight", "3am", "6am", "9am", "noon", "3pm", "6pm", "9pm", "midnight")
-        ) + expand_limits(x=60*24) + 
-    xlab("Time of Day") + ylab("Average Steps per 5 minutes") + 
-    ggtitle("Average Steps per day broken by weekday/weekend")
-print(p2)
-```
-
-![](PA1_template_files/figure-html/weekdayactivity plot-1.png) 
